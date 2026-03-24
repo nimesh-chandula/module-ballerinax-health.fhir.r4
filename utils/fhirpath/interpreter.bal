@@ -291,6 +291,9 @@ isolated function visitFunctionExpr(FunctionExpr expr, json context) returns Fhi
         "exists" => {
             return applyExistsFunction(targetResults, expr.params, context);
         }
+        "first" => {
+            return applyFirstFunction(targetResults, expr.params);
+        }
         _ => {
             // Unknown function
             return error FhirpathInterpreterError(string `Unknown function '${expr.name}'`,
@@ -567,6 +570,29 @@ isolated function applyExistsFunction(json[] collection, Expr[] params, json ori
     }
 
     return [false];
+}
+
+# Implements the FHIRPath first() function.
+# Returns a collection containing only the first element of the input collection.
+# Returns an empty collection if the input collection is empty.
+# Takes no parameters.
+#
+# + collection - The collection to get the first element from
+# + params - Function parameters (expects no parameters)
+# + return - A single-element collection with the first item, empty if collection is empty, or an error
+isolated function applyFirstFunction(json[] collection, Expr[] params) returns FhirpathInterpreterError|json[] {
+    // first() requires no parameters
+    if params.length() != 0 {
+        return error FhirpathInterpreterError(
+            string `first() requires 0 parameters, got ${params.length()}`,
+            token = {tokenType: IDENTIFIER, lexeme: "first", literal: (), position: 0});
+    }
+
+    if collection.length() == 0 {
+        return [];
+    }
+
+    return [collection[0]];
 }
 
 // ========================================
