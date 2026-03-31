@@ -39,3 +39,6 @@ const REFERENCE_TYPE_CONTAINED = "contained";
 
 # Location header property name
 public const LOCATION_HEADER_PROP_NAME = "_OH_LOCATION_HEADER_";
+
+# Prior authorisation analytics event name
+public const PRIOR_AUTH_ANALYTICS_EVENT = "PRIOR_AUTH_ANALYTICS_EVENT";
