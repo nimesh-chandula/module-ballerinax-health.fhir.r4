@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerinax/health.fhir.r4;
+
 const X_JWT_HEADER = "x-jwt-assertion";
 final string rotationErrorMessage = "Error rotating analytics log file";
 const LOG_FILE_NAME = "fhir-analytics";
@@ -117,8 +119,9 @@ public type AnalyticsDataRecord readonly & record {|
     map<string> requestHeaders;
     json requestPayload?;
     map<string> responseHeaders;
-    json  responsePayload?;
+    json responsePayload?;
     int statusCode;
     string requestPath;
     string httpMethod;
+    r4:PriorAuthorisationAnalyticsResponseEvent priorAuthData?;
 |};
