@@ -159,16 +159,3 @@ public annotation ResourceDefinitionRecord ResourceDefinition on type;
 public annotation ContainerDefinitionRecord ContainerDefinition on type;
 
 public annotation DataTypeDefinitionRecord DataTypeDefinition on type;
-
-# Analytics event parameters for the claim response in prior authorization flow
-# 
-# + claimType - The type of the claim (standard or expedited)
-# + claimStatus - The status of the claim (approved or denied)
-# + timeToDecide - The time taken to make a decision on the claim in hours
-# + isSLAViolated - Whether the decision time violated the SLA
-public type PriorAuthorisationAnalyticsResponseEvent readonly & record {|
-    int claimType?;
-    int claimStatus?;
-    int timeToDecide?;
-    boolean isSLAViolated?;
-|};
