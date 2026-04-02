@@ -794,7 +794,7 @@ isolated function getLastUpdatedTimeFromClaimResponse(json|http:ClientError resp
         if payloadMap.hasKey(META) {
             map<json> metaJson = check payloadMap.get(META).ensureType();
             if metaJson.hasKey(LAST_UPDATED) {
-                return <string>metaJson.get(LAST_UPDATED);
+                return metaJson.get(LAST_UPDATED).ensureType();
             }
         }
     }

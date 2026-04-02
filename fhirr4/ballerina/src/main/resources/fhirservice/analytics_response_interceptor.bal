@@ -195,7 +195,7 @@ isolated function constructAnalyticsDataRecord(http:RequestContext ctx, http:Req
             statusCode: statusCode,
             requestPath: requestPath,
             httpMethod: httpMethod,
-            requestPayload: analytics.shouldPublishPayloads ? check responsePayload : (),
+            requestPayload: analytics.shouldPublishPayloads ? check requestPayload : (),
             responsePayload: analytics.shouldPublishPayloads ? check responsePayload : (),
             priorAuthData: paEvent
         };
