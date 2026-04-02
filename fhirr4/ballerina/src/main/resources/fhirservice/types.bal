@@ -14,8 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerinax/health.fhir.r4;
-
 const X_JWT_HEADER = "x-jwt-assertion";
 final string rotationErrorMessage = "Error rotating analytics log file";
 const LOG_FILE_NAME = "fhir-analytics";
@@ -24,6 +22,15 @@ const DEFAULT_FILE_LOCATION = "logs";
 const LOG_FILE_DIRECTORY = "resources";
 const AUTHORIZATION_HEADER = "authorization";
 const DEFAULT_SERVER_CONTEXT = "/fhir/r4/";
+const CLAIM_CREATED_TIME = "claimCreatedTime";
+const CLAIM_TYPE = "claimType";
+const CLAIM_STATUS = "claimStatus";
+const RESOURCE_TYPE = "resourceType";
+const CLAIM_RESPONSE = "ClaimResponse";
+const META = "meta";
+const LAST_UPDATED = "lastUpdated";
+const CMS_PATIENT_ACCESS = "cms-patient-access";
+const CMS_PRIOR_AUTH = "cms-prior-auth";
 
 # Represents a FHIR service type
 public type Service distinct service object{};
@@ -123,5 +130,5 @@ public type AnalyticsDataRecord readonly & record {|
     int statusCode;
     string requestPath;
     string httpMethod;
-    r4:PriorAuthorisationAnalyticsResponseEvent priorAuthData?;
+    json priorAuthData?;
 |};

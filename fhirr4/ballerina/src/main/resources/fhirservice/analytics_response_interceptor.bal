@@ -146,136 +146,57 @@ isolated function constructAnalyticsDataRecord(http:RequestContext ctx, http:Req
     // Get prior auth analytics event if exist in the context
     r4:FHIRContext fhirContext = check r4:getFHIRContext(ctx);
     anydata event = fhirContext.getProperty(r4:PRIOR_AUTH_ANALYTICS_EVENT);
+    (json|http:ClientError) & readonly requestPayload = req.getJsonPayload().cloneReadOnly();
+    (json|http:ClientError) & readonly responsePayload = res.getJsonPayload().cloneReadOnly();
 
     if event is () {
-        if analytics.shouldPublishPayloads {
-            (json|http:ClientError) & readonly requestPayload = req.getJsonPayload().cloneReadOnly();
-            if requestPayload is http:ClientError {
-                // This means a payload is not present
-                requestPayload = ();
-            }
-            (json|http:ClientError) & readonly responsePayload = res.getJsonPayload().cloneReadOnly();
-            if responsePayload is http:ClientError {
-                // This means a payload is not present
-                responsePayload = ();
-            }
-
-            if requestPayload is () && responsePayload is () {
-                AnalyticsDataRecord dataRecord =  {
-                    requestHeaders: requestHeaders,
-                    responseHeaders: responseHeaders,
-                    statusCode: statusCode,
-                    requestPath: requestPath,
-                    httpMethod: httpMethod
-                };
-                return dataRecord;
-            } else if (requestPayload is json) && responsePayload is () {
-                AnalyticsDataRecord dataRecord =  {
-                    requestHeaders: requestHeaders,
-                    responseHeaders: responseHeaders,
-                    statusCode: statusCode,
-                    requestPath: requestPath,
-                    httpMethod: httpMethod,
-                    requestPayload: requestPayload
-                };
-                return dataRecord;
-            } else if (requestPayload is () && responsePayload is json) {
-                AnalyticsDataRecord dataRecord = {
-                    requestHeaders: requestHeaders,
-                    responseHeaders: responseHeaders,
-                    statusCode: statusCode,
-                    requestPath: requestPath,
-                    httpMethod: httpMethod,
-                    responsePayload: responsePayload
-                };
-                return dataRecord;
-            } else if (requestPayload is json && responsePayload is json) {
-                AnalyticsDataRecord dataRecord = {
-                    requestHeaders: requestHeaders,
-                    responseHeaders: responseHeaders,
-                    statusCode: statusCode,
-                    requestPath: requestPath,
-                    httpMethod: httpMethod,
-                    requestPayload: requestPayload,
-                    responsePayload: responsePayload
-                };
-                return dataRecord;
-            }
+        if requestPayload is http:ClientError {
+            // This means a payload is not present
+            requestPayload = ();
         }
-        AnalyticsDataRecord dataRecord = {
-            requestHeaders: requestHeaders,
-            responseHeaders: responseHeaders,
-            statusCode: statusCode,
-            requestPath: requestPath,
-            httpMethod: httpMethod
-        };
-        return dataRecord;
-    } else {
-        (r4:PriorAuthorisationAnalyticsResponseEvent? & readonly) paEvent = <(r4:PriorAuthorisationAnalyticsResponseEvent? & readonly)>event;
-        if analytics.shouldPublishPayloads {
-            (json|http:ClientError) & readonly requestPayload = req.getJsonPayload().cloneReadOnly();
-            if requestPayload is http:ClientError {
-                // This means a payload is not present
-                requestPayload = ();
-            }
-            (json|http:ClientError) & readonly responsePayload = res.getJsonPayload().cloneReadOnly();
-            if responsePayload is http:ClientError {
-                // This means a payload is not present
-                responsePayload = ();
-            }
-
-            if requestPayload is () && responsePayload is () {
-                AnalyticsDataRecord dataRecord =  {
-                    requestHeaders: requestHeaders,
-                    responseHeaders: responseHeaders,
-                    statusCode: statusCode,
-                    requestPath: requestPath,
-                    httpMethod: httpMethod,
-                    priorAuthData: paEvent
-                };
-                return dataRecord;
-            } else if (requestPayload is json) && responsePayload is () {
-                AnalyticsDataRecord dataRecord =  {
-                    requestHeaders: requestHeaders,
-                    responseHeaders: responseHeaders,
-                    statusCode: statusCode,
-                    requestPath: requestPath,
-                    httpMethod: httpMethod,
-                    requestPayload: requestPayload,
-                    priorAuthData: paEvent
-                };
-                return dataRecord;
-            } else if (requestPayload is () && responsePayload is json) {
-                AnalyticsDataRecord dataRecord = {
-                    requestHeaders: requestHeaders,
-                    responseHeaders: responseHeaders,
-                    statusCode: statusCode,
-                    requestPath: requestPath,
-                    httpMethod: httpMethod,
-                    responsePayload: responsePayload,
-                    priorAuthData: paEvent
-                };
-                return dataRecord;
-            } else if (requestPayload is json && responsePayload is json) {
-                AnalyticsDataRecord dataRecord = {
-                    requestHeaders: requestHeaders,
-                    responseHeaders: responseHeaders,
-                    statusCode: statusCode,
-                    requestPath: requestPath,
-                    httpMethod: httpMethod,
-                    requestPayload: requestPayload,
-                    responsePayload: responsePayload,
-                    priorAuthData: paEvent
-                };
-                return dataRecord;
-            }
+        if responsePayload is http:ClientError {
+            // This means a payload is not present
+            responsePayload = ();
         }
-        AnalyticsDataRecord dataRecord = {
+        AnalyticsDataRecord dataRecord =  {
             requestHeaders: requestHeaders,
             responseHeaders: responseHeaders,
             statusCode: statusCode,
             requestPath: requestPath,
             httpMethod: httpMethod,
+            requestPayload: (analytics.shouldPublishPayloads) ? check requestPayload : (),
+            responsePayload: analytics.shouldPublishPayloads ? check responsePayload : ()
+        };
+        return dataRecord;
+    } else {
+        if requestPayload is http:ClientError {
+            // This means a payload is not present
+            requestPayload = ();
+        }
+        if responsePayload is http:ClientError {
+            // This means a payload is not present
+            responsePayload = ();
+        }
+
+        map<json> mapOfEvent = check event.ensureType();
+        string? lastUpdatedTimeOfClaimResponse = check getLastUpdatedTimeFromClaimResponse(responsePayload);
+        int timeToDecide = calculateTimeToDecide(lastUpdatedTimeOfClaimResponse, mapOfEvent.get(CLAIM_CREATED_TIME).toString());
+
+        int claimType = check mapOfEvent.get(CLAIM_TYPE);
+        r4:PriorAuthorisationAnalyticsResponseEvent paEvent = {
+            claimType: claimType,
+            claimStatus: check mapOfEvent.get(CLAIM_STATUS),
+            timeToDecide: timeToDecide,
+            isSLAViolated: isSlaViolated(claimType, timeToDecide)
+        };
+        AnalyticsDataRecord dataRecord =  {
+            requestHeaders: requestHeaders,
+            responseHeaders: responseHeaders,
+            statusCode: statusCode,
+            requestPath: requestPath,
+            httpMethod: httpMethod,
+            requestPayload: analytics.shouldPublishPayloads ? check responsePayload : (),
+            responsePayload: analytics.shouldPublishPayloads ? check responsePayload : (),
             priorAuthData: paEvent
         };
         return dataRecord;
@@ -328,10 +249,10 @@ isolated function writeAnalyticsDataToFile(AnalyticsDataRecord analyticsDataReco
         response.body = analyticsDataRecord?.responsePayload;
 
         AnalyticsData analyticsData = {request: request, response: response};
-        if analyticsDataRecord.priorAuthData is () {
-            analyticsData.metadata = {"cms": cmsAnalyticsData};
+        if analyticsDataRecord?.priorAuthData is () {
+            analyticsData.metadata = {CMS_PATIENT_ACCESS: cmsAnalyticsData};
         } else {
-            analyticsData.metadata = {"cms": cmsAnalyticsData, "priorAuth": analyticsDataRecord.priorAuthData.toJson()};
+            analyticsData.metadata = {CMS_PATIENT_ACCESS: cmsAnalyticsData, CMS_PRIOR_AUTH: analyticsDataRecord?.priorAuthData.toJson()};
         }
         
         if fhirUser is string {

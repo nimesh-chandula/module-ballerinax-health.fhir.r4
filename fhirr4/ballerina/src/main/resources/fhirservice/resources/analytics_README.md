@@ -6,12 +6,12 @@ CMS requires Patient Access API Metrics to be published to CMS annually. This re
 
 CMS-0057-F requires Prior Authorisation Metrics to be published on the public websites of the payers annually. With this solution, the following analytics can be visualised using the Moesif dashboard.
 
-- For standard prior authorization requests, aggregated for all items and services:
+- For standard prior authorisation requests, aggregated for all items and services:
 -- Percentage approved in the calendar year
 -- Percentage denied in the calendar year
 -- The average (mean) response times that elapsed between the submission of a request and a determination by the payer
 
-- For expedited prior authorization requests, aggregated for all items and services:
+- For expedited prior authorisation requests, aggregated for all items and services:
 -- Percentage approved in the calendar year
 -- Percentage denied in the calendar year
 -- The average (mean) response times that elapsed between the submission of a request and a determination by the payer
@@ -92,7 +92,7 @@ A custom Fluent Bit configuration can be used to monitor the log file which the 
 
 ## Prior Authoristaion Analytics - Important notes
 
-- The prior authorisation analytics are only shown for a time of an (previous) year.
+- The prior authorisation analytics are only reported for the previous calendar year.
 - It is assumed the final decision is made when a claim response update request has the outcome as "complete".
 - The time the payer took to make the final decision is determined in hours using the claim created time and the claim response updated time at the time the final decision is made. The ```meta.lastUpdated``` field of the claim response must be present and should be the time the final decision has been made. The ```created``` field should also be present in the claim. Otherwise, the time will be calculated as 0.
 - The SLA for the expedited and standard claim requests are defined as 72 hours and 7 days respectively.
