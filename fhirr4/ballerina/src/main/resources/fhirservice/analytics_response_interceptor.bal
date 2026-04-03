@@ -143,63 +143,57 @@ isolated function constructAnalyticsDataRecord(http:RequestContext ctx, http:Req
     string requestPath  = req.rawPath;
     string httpMethod = req.method;
 
-    if analytics.shouldPublishPayloads {
-        (json|http:ClientError) & readonly requestPayload = req.getJsonPayload().cloneReadOnly();
-        if requestPayload is http:ClientError {
-            // This means a payload is not present
-            requestPayload = ();
-        }
-        (json|http:ClientError) & readonly responsePayload = res.getJsonPayload().cloneReadOnly();
-        if responsePayload is http:ClientError {
-            // This means a payload is not present
-            responsePayload = ();
-        }
+    (json|http:ClientError) & readonly requestPayload = req.getJsonPayload().cloneReadOnly();
+    (json|http:ClientError) & readonly responsePayload = res.getJsonPayload().cloneReadOnly();
 
-        if requestPayload is () && responsePayload is () {
-            return {
-                requestHeaders: requestHeaders,
-                responseHeaders: responseHeaders,
-                statusCode: statusCode,
-                requestPath: requestPath,
-                httpMethod: httpMethod
-            };
-        } else if (requestPayload is json) && responsePayload is () {
-            return {
-                requestHeaders: requestHeaders,
-                responseHeaders: responseHeaders,
-                statusCode: statusCode,
-                requestPath: requestPath,
-                httpMethod: httpMethod,
-                requestPayload: requestPayload
-            };
-        } else if (requestPayload is () && responsePayload is json) {
-            return {
-                requestHeaders: requestHeaders,
-                responseHeaders: responseHeaders,
-                statusCode: statusCode,
-                requestPath: requestPath,
-                httpMethod: httpMethod,
-                responsePayload: responsePayload
-            };
-        } else if (requestPayload is json && responsePayload is json) {
-            return {
-                requestHeaders: requestHeaders,
-                responseHeaders: responseHeaders,
-                statusCode: statusCode,
-                requestPath: requestPath,
-                httpMethod: httpMethod,
-                requestPayload: requestPayload,
-                responsePayload: responsePayload
-            };
-        }
+    if requestPayload is http:ClientError {
+        // This means a payload is not present
+        requestPayload = ();
     }
-    return {
+    if responsePayload is http:ClientError {
+        // This means a payload is not present
+        responsePayload = ();
+    }
+
+    // Get prior auth analytics event if exist in the context
+    r4:FHIRContext|error fhirContext = r4:getFHIRContext(ctx);
+    if fhirContext is r4:FHIRContext {
+        anydata event = fhirContext.getProperty(r4:PRIOR_AUTH_ANALYTICS_EVENT);
+        if event !is () {
+            map<json> mapOfEvent = check event.ensureType();
+            string? lastUpdatedTimeOfClaimResponse = check getLastUpdatedTimeFromClaimResponse(responsePayload);
+            int timeToDecide = calculateTimeToDecide(lastUpdatedTimeOfClaimResponse, mapOfEvent.get(CLAIM_CREATED_TIME).toString());
+
+            int claimType = check mapOfEvent.get(CLAIM_TYPE);
+            r4:PriorAuthorisationAnalyticsResponseEvent paEvent = {
+                claimType: claimType,
+                claimStatus: check mapOfEvent.get(CLAIM_STATUS),
+                timeToDecide: timeToDecide,
+                isSLAViolated: isSlaViolated(claimType, timeToDecide)
+            };
+            AnalyticsDataRecord dataRecord =  {
+                requestHeaders: requestHeaders,
+                responseHeaders: responseHeaders,
+                statusCode: statusCode,
+                requestPath: requestPath,
+                httpMethod: httpMethod,
+                requestPayload: analytics.shouldPublishPayloads ? check requestPayload : (),
+                responsePayload: analytics.shouldPublishPayloads ? check responsePayload : (),
+                priorAuthData: paEvent
+            };
+            return dataRecord;
+        } 
+    }
+    AnalyticsDataRecord dataRecord =  {
         requestHeaders: requestHeaders,
         responseHeaders: responseHeaders,
         statusCode: statusCode,
         requestPath: requestPath,
-        httpMethod: httpMethod
+        httpMethod: httpMethod,
+        requestPayload: analytics.shouldPublishPayloads ? check requestPayload : (),
+        responsePayload: analytics.shouldPublishPayloads ? check responsePayload : ()
     };
+    return dataRecord;
 }
 
 # Writes the analytics data to a file.
@@ -218,7 +212,7 @@ isolated function writeAnalyticsDataToFile(AnalyticsDataRecord analyticsDataReco
         }
         [jwt:Header, jwt:Payload] [_, payload] = decodedJWT;
 
-        map<string> analyticsDataFromJwt = extractAnalyticsDataFromJWT(analytics.jwtAttributes, payload);
+        map<string> cmsAnalyticsData = extractAnalyticsDataFromJWT(analytics.jwtAttributes, payload);
         json requestHeadersJson = convertMapToJson(analyticsDataRecord.requestHeaders);
         json responseHeadersJson = convertMapToJson(analyticsDataRecord.responseHeaders);
         string? fhirUser = extractFhirUserFromJWT(payload);
@@ -227,7 +221,7 @@ isolated function writeAnalyticsDataToFile(AnalyticsDataRecord analyticsDataReco
         if analytics.shouldPublishPayloads == true {
             // If analytics data enrichment is enabled, fetch and add to analytics data
             if analytics.enrichPayload is AnalyticsPayloadEnrich && analytics.enrichPayload?.enabled == true {
-                enrichAnalyticsData(analyticsDataFromJwt, dataEnrichHttpClient);
+                enrichAnalyticsData(cmsAnalyticsData, dataEnrichHttpClient);
             }
         }
 
@@ -247,12 +241,13 @@ isolated function writeAnalyticsDataToFile(AnalyticsDataRecord analyticsDataReco
         request.body = analyticsDataRecord?.requestPayload;
         response.body = analyticsDataRecord?.responsePayload;
 
-        AnalyticsData analyticsData = {
-            request: request,
-            response: response,
-            metadata: analyticsDataFromJwt
-        };
-
+        AnalyticsData analyticsData = {request: request, response: response};
+        if analyticsDataRecord?.priorAuthData is () {
+            analyticsData.metadata = {"cms-patient-access": cmsAnalyticsData};
+        } else {
+            analyticsData.metadata = {"cms-patient-access": cmsAnalyticsData, "cms-prior-auth": analyticsDataRecord?.priorAuthData.toJson()};
+        }
+        
         if fhirUser is string {
             analyticsData.user_id = fhirUser;
         }
