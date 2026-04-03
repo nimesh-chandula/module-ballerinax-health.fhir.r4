@@ -2,9 +2,30 @@
 
 CMS requires Patient Access API Metrics to be published to CMS annually. This requirement can be achieved using the `AnalyticsResponseInterceptor`, which comes inbuilt in the `health.fhirr4` service.
 
+# Prior Authorisation Analytics
+
+CMS-0057-F requires Prior Authorisation Metrics to be published on the public websites of the payers annually. With this solution, the following analytics can be visualised using the Moesif dashboard.
+
+- For standard prior authorisation requests, aggregated for all items and services:
+-- Percentage approved in the calendar year
+-- Percentage denied in the calendar year
+-- The average (mean) response times that elapsed between the submission of a request and a determination by the payer
+
+- For expedited prior authorisation requests, aggregated for all items and services:
+-- Percentage approved in the calendar year
+-- Percentage denied in the calendar year
+-- The average (mean) response times that elapsed between the submission of a request and a determination by the payer
+
+In addition to the above analytics, following analytics are supported,
+
+- SLA violation analytics for standard and expedited requests
+- Partial approval analytics for claims
+
 # Overview
 
 The ```AnalyticsResponseInterceptor``` intercepts the FHIR APIs and writes the required data in a preconfigured log file. Based on the following configuration, the log file path and the name will be decided. Also, there is the capability to allow or exclude APIs as required using the configurations. The optional support of payload publishing is also provided through a configuration. 
+
+- **Note**: However, if you require prior authorisation analytics, you should not exclude the prior authorisation APIs.
 
 In addition to that, the a separate configuration is introduced to host a separate service in case additional data needs to be included. Find more information on this in the ```Enrich Analytics Payload Endpoint``` section.
 
@@ -39,7 +60,7 @@ excludedApiContexts = []
 > - allowedApiContexts:
 	- a list of comma-separated regexes. If it requires allowing only a set of defined APIs through the interceptor, they should be configured in this list as comma-separated strings. These can be valid regexes.
 > - excludedApiContexts: 
-	- a list of comma-separated regexes. If it requires to not to allow only a set of defined APIs through the interceptor, they should be configured in this list as comma-separated strings. These can be valid regexes. If both lists are configured, the priority will be given to the excluded list, and the allowed list will be ignored.
+	- a list of comma-separated regexes. If it requires to not to allow only a set of defined APIs through the interceptor, they should be configured in this list as comma-separated strings. These can be valid regexes. If both lists are configured, the priority will be given to the excluded list, and the allowed list will be ignored. If prior authorisation analytics are required, do not exclude the prior authorisation APIs.
 
 ## Enrich Analytics Payload Endpoint
 
@@ -68,3 +89,10 @@ Check ```enrich_analytics_payload_api.yaml``` in ```module-ballerinax-health.fhi
 ## How to implement analytics publishing
 
 A custom Fluent Bit configuration can be used to monitor the log file which the analytics data are written using the `AnalyticsResponseInterceptor`. You can find sample Fluent Bit configurations for Moesif and Microsoft Fabric analytics platforms by referring to [analytics_README.md](https://github.com/wso2/reference-implementation-cms0057f/blob/main/fhir-service/resources/analytics_README.md).
+
+## Prior Authoristaion Analytics - Important notes
+
+- The prior authorisation analytics are only reported for the previous calendar year.
+- It is assumed the final decision is made when a claim response update request has the outcome as "complete".
+- The time the payer took to make the final decision is determined in hours using the claim created time and the claim response updated time at the time the final decision is made. The ```meta.lastUpdated``` field of the claim response must be present and should be the time the final decision has been made. The ```created``` field should also be present in the claim. Otherwise, the time will be calculated as 0.
+- The SLA for the expedited and standard claim requests are defined as 72 hours and 7 days respectively.

@@ -22,6 +22,13 @@ const DEFAULT_FILE_LOCATION = "logs";
 const LOG_FILE_DIRECTORY = "resources";
 const AUTHORIZATION_HEADER = "authorization";
 const DEFAULT_SERVER_CONTEXT = "/fhir/r4/";
+const CLAIM_CREATED_TIME = "claimCreatedTime";
+const CLAIM_TYPE = "claimType";
+const CLAIM_STATUS = "claimStatus";
+const RESOURCE_TYPE = "resourceType";
+const CLAIM_RESPONSE = "ClaimResponse";
+const META = "meta";
+const LAST_UPDATED = "lastUpdated";
 
 # Represents a FHIR service type
 public type Service distinct service object{};
@@ -117,8 +124,9 @@ public type AnalyticsDataRecord readonly & record {|
     map<string> requestHeaders;
     json requestPayload?;
     map<string> responseHeaders;
-    json  responsePayload?;
+    json responsePayload?;
     int statusCode;
     string requestPath;
     string httpMethod;
+    json priorAuthData?;
 |};

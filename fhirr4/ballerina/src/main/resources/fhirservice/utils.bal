@@ -708,3 +708,124 @@ isolated function getPreviousCivilDate() returns time:Civil|error? {
     time:Civil previousDayCivilFromStr = check time:civilFromString(previousDayCivilStr);    
     return previousDayCivilFromStr;
 }
+
+# This function calculates the time the payer took to make the final decision. 
+# 
+# This is calculated using the time difference between the time the claim was submitted and the final decision. The 
+# submission time is taken using the "Claim.created" time. The time of the final decision is taken using the 
+# "ClaimResponse.meta.lastUpdatedTime" field.
+# 
+# The times are expected in one of the following formats.
+# 
+# YYYY-MM-DD
+# YYYY-MM-DDThh:mm:ss+zz:zz
+# 
+# + lastUpdatedTime - claim response
+# + claimCreatedTime - claim created time string
+# 
+# + return - the time difference in hours, or 0 when lastUpdateTime is not present. The return logic should be changed
+# after this issue is fixed: https://github.com/wso2-enterprise/moesif-internal/issues/7
+isolated function calculateTimeToDecide(string? lastUpdatedTime, string claimCreatedTime) returns int {
+
+    if lastUpdatedTime is () {
+        log:printWarn("ClaimResponse.meta.lastUpdated is missing");
+        return 0;
+    }
+
+    string normalizedCreatedTime = normalizeDateTimeString(claimCreatedTime);
+    string normalizedUpdatedTime = normalizeDateTimeString(lastUpdatedTime);
+    log:printDebug(string `Normalised created time: ${normalizedCreatedTime}`);
+    log:printDebug(string `Normalised updated time: ${normalizedUpdatedTime}`);
+
+    // Convert to UTC timestamps
+    time:Utc|error createdUtc = time:utcFromString(normalizedCreatedTime);
+    time:Utc|error updatedUtc = time:utcFromString(normalizedUpdatedTime);
+
+    if createdUtc is time:Utc && updatedUtc is time:Utc {
+        // Calculate difference in seconds
+        time:Seconds diffSeconds = time:utcDiffSeconds(updatedUtc, createdUtc);
+        if diffSeconds < 0.0d {
+            log:printWarn("ClaimResponse.meta.lastUpdated is earlier than Claim.created");
+            return 0;
+        }
+        // Convert to human-readable format
+        int formatted = formatTimeDifference(diffSeconds);
+        return formatted;
+    }
+    log:printWarn("Couldn't determine the time to decide, ");
+    return 0;
+}
+
+# Normalizes a datetime string to UTC format that can be parsed by time:utcFromString().
+# Handles both YYYY-MM-DD and YYYY-MM-DDThh:mm:ss+zz:zz formats.
+#
+# + dateTimeStr - The datetime string to normalize
+# + return - Normalized datetime string in UTC format
+isolated function normalizeDateTimeString(string dateTimeStr) returns string {
+    // If the string already contains 'T', it's in datetime format
+    if dateTimeStr.includes("T") {
+        return dateTimeStr;
+    }
+    // If it's date-only format (YYYY-MM-DD), append midnight UTC time
+    return dateTimeStr + "T00:00:00Z";
+}
+
+# # Converts a time difference in seconds to whole hours.
+#
+# + diffSeconds - Time difference in seconds
+# + return - + return - Time difference in whole hours
+isolated function formatTimeDifference(decimal diffSeconds) returns int {
+    
+    int totalSeconds = <int>diffSeconds;
+    return totalSeconds / 3600;
+}
+
+# Check the last updated time of the claim response for prior authorisation analytics
+# 
+# + responsePayload - the response payload
+# 
+# + return - the lastUpdated time string if available, () otherwise.
+isolated function getLastUpdatedTimeFromClaimResponse(json|http:ClientError responsePayload) returns string?|error? {
+
+    map<json> payloadMap = check responsePayload.ensureType();
+    if payloadMap.hasKey(RESOURCE_TYPE) && payloadMap.get(RESOURCE_TYPE) == CLAIM_RESPONSE {
+        if payloadMap.hasKey(META) {
+            map<json> metaJson = check payloadMap.get(META).ensureType();
+            if metaJson.hasKey(LAST_UPDATED) {
+                return metaJson.get(LAST_UPDATED).ensureType();
+            }
+        }
+    }
+    return ();
+}
+
+# Determines whether the payer violated the SLA of the claim.
+# 
+# For expedited claims, the SLA time is 72 hours
+# For standard claims, the SLA time is 7 days (168 hours)
+# 
+# + claimType - the type of the claim (whether standard - 2 or expedited - 1)
+# + timeToDecide - the time the payer took to make the final decision in hours
+# 
+# + return - whether the SLA is violated or not
+isolated function isSlaViolated(int claimType, int timeToDecide) returns boolean {
+
+    // claimType will only be either expedited or standard
+    if claimType == 1 {
+        if timeToDecide <= 72 {
+            log:printDebug(string `Claim type: Expedited; Time to decide: ${timeToDecide}`);
+            return false;
+        } else {
+            log:printDebug(string `Claim type: Expedited; Time to decide: ${timeToDecide}`);
+            return true;
+        }
+    } else {
+        if timeToDecide <= 168 { // Number of hours equal to 7 days
+            log:printDebug(string `Claim type: Standard; Time to decide: ${timeToDecide}`);
+            return false;
+        } else {
+            log:printDebug(string `Claim type: Standard; Time to decide: ${timeToDecide}`);
+            return true;
+        }
+    }
+}
